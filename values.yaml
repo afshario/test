@@ -8,21 +8,29 @@ configMaps:
     labels:
       app: fastapi-demo
     data:
+      RATE : 0.5
       APP_MESSAGE: "Hello from Kubernetes ConfigMap!"
       APP_ENV: "learning"
-      APP_VERSION: "1.0.0"
 
 secrets:
   app-secret:
     labels:
       app: fastapi-demo
     data:
+      DSN: "http://f5c2d8386e3849ffbb25fba7d9c08297@127.0.0.1/1"
       SECRET_GREETING: "Hello from Kubernetes Secret!"
-      API_TOKEN: "replace-me-with-a-demo-token"
 
 pvcs:
-  app-data:
-    disabled: true
+  name: fastapi-demo-app-data
+  namespace: fastapi-demo
+  labels:
+    app: fastapi-demo
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 1Gi
 
 services:
   api:
@@ -32,39 +40,43 @@ services:
       - name: http
         port: 8000
         targetPort: http
-    extraSelectorLabels:
-      app: fastapi-demo
+
+# ingresses:
+#   api.example.com:
+#     ingressClassName: nginx
+#     hosts:
+#       - hostname: api.example.com
+#         paths:
+#           - path: /
+#             pathType: Prefix
+#             serviceName: api
+#             servicePort: 8000
 
 deployments:
   api:
     replicas: 1
     labels:
       app: fastapi-demo
-    extraSelectorLabels:
-      app: fastapi-demo
-    podLabels:
-      app: fastapi-demo
-    nodeSelector:
-      kubernetes.io/os: linux
-    tolerations:
-      - key: dedicated
-        operator: Equal
-        value: demo
-        effect: NoSchedule
-    affinity:
-      podAntiAffinity:
-        preferredDuringSchedulingIgnoredDuringExecution:
-          - weight: 100
-            podAffinityTerm:
-              topologyKey: kubernetes.io/hostname
-              labelSelector:
-                matchLabels:
-                  app: fastapi-demo
+    # nodeSelector:
+    #   kubernetes.io/os: linux
+    # tolerations:
+    #   - key: dedicated
+    #     operator: Equal
+    #     value: demo
+    #     effect: NoSchedule
+    # affinity:
+    #   podAntiAffinity:
+    #     preferredDuringSchedulingIgnoredDuringExecution:
+    #       - weight: 100
+    #         podAffinityTerm:
+    #           topologyKey: kubernetes.io/hostname
+    #           labelSelector:
+    #             matchLabels:
+    #               app: fastapi-demo
     containers:
       api:
         image: fastapi-k8s-demo
         imageTag: "1.0.0"
-        imagePullPolicy: IfNotPresent
         ports:
           - name: http
             containerPort: 8000
@@ -72,9 +84,6 @@ deployments:
           - app-config
         envSecrets:
           - app-secret
-        env:
-          - name: DATA_FILE
-            value: /data/visits.txt
         volumeMounts:
           - name: app-data
             mountPath: /data
@@ -102,61 +111,19 @@ deployments:
         persistentVolumeClaim:
           claimName: fastapi-demo-app-data
 
-extraDeploy:
-  app-data-pvc: |
-    apiVersion: v1
-    kind: PersistentVolumeClaim
-    metadata:
-      name: fastapi-demo-app-data
-      namespace: fastapi-demo
-      labels:
-        app: fastapi-demo
-    spec:
-      accessModes:
-        - ReadWriteOnce
-      storageClassName: local-path
-      resources:
-        requests:
-          storage: 1Gi
-
-  fastapi-service-monitor: |
-    apiVersion: monitoring.coreos.com/v1
-    kind: ServiceMonitor
-    metadata:
-      name: fastapi-demo-service-monitor
-      namespace: fastapi-demo
-      labels:
-        app: fastapi-demo
-    spec:
-      namespaceSelector:
-        matchNames:
-          - fastapi-demo
-      selector:
-        matchLabels:
-          app: fastapi-demo
-      endpoints:
-        - port: http
-          path: /metrics
-          interval: 15s
-          scrapeTimeout: 5s
-
-  fastapi-pod-monitor: |
-    apiVersion: monitoring.coreos.com/v1
-    kind: PodMonitor
-    metadata:
-      name: fastapi-demo-pod-monitor
-      namespace: fastapi-demo
-      labels:
-        app: fastapi-demo
-    spec:
-      namespaceSelector:
-        matchNames:
-          - fastapi-demo
-      selector:
-        matchLabels:
-          app: fastapi-demo
-      podMetricsEndpoints:
-        - port: http
-          path: /metrics
-          interval: 15s
-          scrapeTimeout: 5s
+ServiceMonitor:
+  name: fastapi-demo-service-monitor
+  namespace: fastapi-demo
+  labels:
+    app: fastapi-demo
+  namespaceSelector:
+    matchNames:
+      - fastapi-demo
+  selector:
+    matchLabels:
+      app: fastapi-demo
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 15s
+      scrapeTimeout: 5s
