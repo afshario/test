@@ -1,14 +1,11 @@
 nameOverride: fastapi-demo
 
-generic:
-  hookAnnotations: null
-
 configMaps:
   app-config:
     labels:
       app: fastapi-demo
     data:
-      RATE : 0.5
+      RATE: "0.5"
       APP_MESSAGE: "Hello from Kubernetes ConfigMap!"
       APP_ENV: "learning"
 
@@ -21,16 +18,13 @@ secrets:
       SECRET_GREETING: "Hello from Kubernetes Secret!"
 
 pvcs:
-  name: fastapi-demo-app-data
-  namespace: fastapi-demo
-  labels:
-    app: fastapi-demo
-  accessModes:
-    - ReadWriteOnce
-  storageClassName: local-path
-  resources:
-    requests:
-      storage: 1Gi
+  app-data:
+    labels:
+      app: fastapi-demo
+    accessModes:
+      - ReadWriteOnce
+    storageClassName: local-path
+    size: 1Gi
 
 services:
   api:
@@ -50,20 +44,24 @@ services:
 #           - path: /
 #             pathType: Prefix
 #             serviceName: api
-#             servicePort: 8000
+#             servicePort: http
 
 deployments:
   api:
+    disabled: false
     replicas: 1
     labels:
       app: fastapi-demo
+
     # nodeSelector:
     #   kubernetes.io/os: linux
+
     # tolerations:
     #   - key: dedicated
     #     operator: Equal
     #     value: demo
     #     effect: NoSchedule
+
     # affinity:
     #   podAntiAffinity:
     #     preferredDuringSchedulingIgnoredDuringExecution:
@@ -73,32 +71,38 @@ deployments:
     #           labelSelector:
     #             matchLabels:
     #               app: fastapi-demo
+
     containers:
-      api:
+      - name: api
         image: fastapi-k8s-demo
         imageTag: "1.0.0"
         ports:
           - name: http
             containerPort: 8000
+
         envConfigmaps:
           - app-config
         envSecrets:
           - app-secret
+
         volumeMounts:
           - name: app-data
             mountPath: /data
+
         readinessProbe:
           httpGet:
             path: /healthz
             port: http
           initialDelaySeconds: 3
           periodSeconds: 5
+
         livenessProbe:
           httpGet:
             path: /healthz
             port: http
           initialDelaySeconds: 10
           periodSeconds: 10
+
         resources:
           requests:
             cpu: 50m
@@ -107,23 +111,18 @@ deployments:
             cpu: 250m
             memory: 192Mi
     extraVolumes:
-      - name: app-data
-        persistentVolumeClaim:
-          claimName: fastapi-demo-app-data
+    - name: app-data
+      persistentVolumeClaim:
+        claimName: fastapi-demo-app-data
 
-ServiceMonitor:
-  name: fastapi-demo-service-monitor
-  namespace: fastapi-demo
-  labels:
-    app: fastapi-demo
-  namespaceSelector:
-    matchNames:
-      - fastapi-demo
-  selector:
-    matchLabels:
+serviceMonitors:
+  fastapi-demo-service-monitor:
+    labels:
       app: fastapi-demo
-  endpoints:
-    - port: http
-      path: /metrics
-      interval: 15s
-      scrapeTimeout: 5s
+    endpoints:
+      - port: http
+        path: /metrics
+        interval: 15s
+        scrapeTimeout: 5s
+    extraSelectorLabels:
+      app: fastapi-demo
